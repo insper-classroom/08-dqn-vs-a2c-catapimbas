@@ -97,11 +97,35 @@ def train_agent(agent_type, run_id, max_episodes=1000, seed=42):
     os.makedirs(log_path, exist_ok=True)
     logger = configure(log_path, ["csv"])
     
-    # Select and initialize agent
+    # Hyperparameters as specified
+    gamma = 0.99  # Fator de Desconto (Discount Factor)
+    batch_size = 64  # Tamanho do Lote (Batch Size)
+    learning_rate = 1e-3  # Default learning rate
+    
+    # Select and initialize agent with specified hyperparameters
     if agent_type == 'A2C':
-        model = A2C("MlpPolicy", vec_env, seed=seed, verbose=1)
+        model = A2C(
+            "MlpPolicy", 
+            vec_env, 
+            seed=seed, 
+            verbose=1,
+            gamma=gamma,  # Discount factor
+            learning_rate=learning_rate
+        )
     elif agent_type == 'DQN':
-        model = DQN("MlpPolicy", vec_env, seed=seed, verbose=1)
+        model = DQN(
+            "MlpPolicy", 
+            vec_env, 
+            seed=seed, 
+            verbose=1,
+            gamma=gamma,  # Discount factor
+            batch_size=batch_size,
+            learning_rate=learning_rate,
+            buffer_size=50000,  # Tamanho da Memória de Replay
+            exploration_initial_eps=1.0,  # Taxa de Exploração Inicial
+            exploration_final_eps=0.01,   # Taxa de Exploração Mínima
+            exploration_fraction=0.995    # Taxa de Decaimento de Exploração
+        )
     else:
         raise ValueError(f"Unsupported agent type: {agent_type}")
     
@@ -156,7 +180,7 @@ def train_agent(agent_type, run_id, max_episodes=1000, seed=42):
 def main():
     parser = argparse.ArgumentParser(description='Stable Baselines A2C and DQN Comparison')
     parser.add_argument('--runs', type=int, default=1, help='Number of runs (default: 3)')
-    parser.add_argument('--episodes', type=int, default=1000, help='Maximum training episodes (default: 1000)')
+    parser.add_argument('--episodes', type=int, default=10, help='Maximum training episodes (default: 1000)')
     parser.add_argument('--seed', type=int, default=42, help='Random seed (default: 42)')
     parser.add_argument('--render', action='store_true', help='Render test episodes')
     
