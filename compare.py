@@ -11,6 +11,63 @@ from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.common.logger import configure
 from stable_baselines3.common.vec_env import DummyVecEnv
 
+def plot_learning_curves(rewards_a2c, rewards_dqn, runs):
+    """
+    Plot learning curves for A2C and DQN
+    
+    Parameters:
+        rewards_a2c (list): Rewards for A2C across runs
+        rewards_dqn (list): Rewards for DQN across runs
+        runs (int): Number of runs
+    """
+    plt.figure(figsize=(15, 10))
+    
+    # A2C subplot
+    plt.subplot(2, 1, 1)
+    rewards_a2c = np.array(rewards_a2c)
+    
+    # Compute moving average
+    window = min(50, rewards_a2c.shape[1] // 5)
+    rewards_a2c_ma = np.zeros((rewards_a2c.shape[0], rewards_a2c.shape[1] - window + 1))
+    
+    for i in range(rewards_a2c.shape[0]):
+        rewards_a2c_ma[i] = np.convolve(rewards_a2c[i], np.ones(window)/window, mode='valid')
+    
+    # Plot raw rewards and moving average
+    plt.plot(rewards_a2c.T, alpha=0.1, color='blue')
+    plt.plot(np.mean(rewards_a2c_ma, axis=0), color='red', linewidth=2, 
+             label=f'Moving Average (window={window})')
+    plt.title(f'A2C Training Rewards - {runs} Runs')
+    plt.xlabel('Episodes')
+    plt.ylabel('Reward')
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+    
+    # DQN subplot
+    plt.subplot(2, 1, 2)
+    rewards_dqn = np.array(rewards_dqn)
+    
+    # Compute moving average
+    window = min(50, rewards_dqn.shape[1] // 5)
+    rewards_dqn_ma = np.zeros((rewards_dqn.shape[0], rewards_dqn.shape[1] - window + 1))
+    
+    for i in range(rewards_dqn.shape[0]):
+        rewards_dqn_ma[i] = np.convolve(rewards_dqn[i], np.ones(window)/window, mode='valid')
+    
+    # Plot raw rewards and moving average
+    plt.plot(rewards_dqn.T, alpha=0.1, color='green')
+    plt.plot(np.mean(rewards_dqn_ma, axis=0), color='red', linewidth=2, 
+             label=f'Moving Average (window={window})')
+    plt.title(f'DQN Training Rewards - {runs} Runs')
+    plt.xlabel('Episodes')
+    plt.ylabel('Reward')
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+    
+    plt.tight_layout()
+    plt.savefig('results/learning_curves_comparison.png', dpi=300)
+    plt.close()
+
 def train_agent(agent_type, run_id, max_episodes=1000, seed=42):
     """
     Train a Stable Baselines agent on the Lunar Lander environment
@@ -38,7 +95,7 @@ def train_agent(agent_type, run_id, max_episodes=1000, seed=42):
     # Configure logger
     log_path = f'results/{agent_type.lower()}_logs_run_{run_id}/'
     os.makedirs(log_path, exist_ok=True)
-    logger = configure(log_path, [ "csv", "log"])
+    logger = configure(log_path, ["csv"])
     
     # Select and initialize agent
     if agent_type == 'A2C':
@@ -51,9 +108,33 @@ def train_agent(agent_type, run_id, max_episodes=1000, seed=42):
     # Set logger
     model.set_logger(logger)
     
-    # Train the agent
+    # Train the agent and track rewards
     start_time = time.time()
-    model.learn(total_timesteps=max_episodes * 1000)  # Convert episodes to timesteps
+    
+    # Custom training loop to track rewards
+    rewards_per_episode = []
+    for episode in range(max_episodes):
+        # Reset environment
+        state, _ = env.reset()
+        done = False
+        total_reward = 0
+        
+        while not done:
+            # Select and take action
+            action, _ = model.predict(state, deterministic=False)
+            next_state, reward, terminated, truncated, _ = env.step(action)
+            
+            total_reward += reward
+            state = next_state
+            
+            if terminated or truncated:
+                done = True
+        
+        rewards_per_episode.append(total_reward)
+        
+        # Learn from collected experiences if needed
+        model.learn(total_timesteps=1000)
+    
     training_time = time.time() - start_time
     
     # Save the model
@@ -68,133 +149,9 @@ def train_agent(agent_type, run_id, max_episodes=1000, seed=42):
     
     return model, {
         'mean_reward': mean_reward, 
-        'std_reward': std_reward
+        'std_reward': std_reward,
+        'rewards_per_episode': rewards_per_episode
     }, training_time
-
-def test_agent(agent_type, run_id, max_episodes=10, render=False, seed=42):
-    """
-    Test a trained Stable Baselines agent on the Lunar Lander environment
-    
-    Parameters:
-        agent_type (str): Type of agent ('A2C' or 'DQN')
-        run_id (int): Unique run identifier
-        max_episodes (int): Number of test episodes
-        render (bool): Whether to render the environment
-        seed (int): Random seed for reproducibility
-    
-    Returns:
-        dict: Test results including rewards and statistics
-    """
-    # Set random seeds
-    torch.manual_seed(seed)
-    np.random.seed(seed)
-    random.seed(seed)
-    
-    # Create environment
-    render_mode = "human" if render else None
-    env = gym.make('LunarLander-v3', render_mode=render_mode)
-    
-    # Load the trained model
-    model_path = f'data/{agent_type.lower()}_lunar_lander_model_run_{run_id}.zip'
-    try:
-        if agent_type == 'A2C':
-            model = A2C.load(model_path, env=env)
-        elif agent_type == 'DQN':
-            model = DQN.load(model_path, env=env)
-        else:
-            raise ValueError(f"Unsupported agent type: {agent_type}")
-    except FileNotFoundError:
-        print(f"Error: Could not find {agent_type} model for run {run_id}")
-        return {}
-    
-    # Test the agent
-    rewards = []
-    for episode in range(max_episodes):
-        state, _ = env.reset()
-        total_reward = 0
-        done = False
-        
-        while not done:
-            action, _ = model.predict(state, deterministic=True)
-            state, reward, terminated, truncated, _ = env.step(action)
-            
-            total_reward += reward
-            
-            if terminated or truncated:
-                done = True
-        
-        print(f"{agent_type} - Episode {episode+1}: Reward = {total_reward:.2f}")
-        rewards.append(total_reward)
-    
-    env.close()
-    
-    # Compute statistics
-    return {
-        'rewards': rewards,
-        'mean_reward': np.mean(rewards),
-        'std_reward': np.std(rewards),
-        'min_reward': np.min(rewards),
-        'max_reward': np.max(rewards)
-    }
-
-def plot_test_results(test_results_a2c, test_results_dqn, runs):
-    """
-    Plot comparative test results for A2C and DQN
-    
-    Parameters:
-        test_results_a2c (dict): A2C test results
-        test_results_dqn (dict): DQN test results
-        runs (int): Number of runs
-    """
-    plt.figure(figsize=(12, 6))
-    
-    # A2C results
-    plt.subplot(1, 2, 1)
-    plt.title(f'A2C Test Results (Runs: {runs})')
-    plt.plot(test_results_a2c['rewards'], marker='o', linestyle='-', alpha=0.6, label='Episode Rewards')
-    plt.axhline(y=test_results_a2c['mean_reward'], color='r', linestyle='--', 
-                label=f'Mean: {test_results_a2c["mean_reward"]:.2f}')
-    plt.xlabel('Test Episodes')
-    plt.ylabel('Reward')
-    plt.legend()
-    plt.grid(True, alpha=0.3)
-    
-    # DQN results
-    plt.subplot(1, 2, 2)
-    plt.title(f'DQN Test Results (Runs: {runs})')
-    plt.plot(test_results_dqn['rewards'], marker='o', linestyle='-', alpha=0.6, label='Episode Rewards')
-    plt.axhline(y=test_results_dqn['mean_reward'], color='r', linestyle='--', 
-                label=f'Mean: {test_results_dqn["mean_reward"]:.2f}')
-    plt.xlabel('Test Episodes')
-    plt.ylabel('Reward')
-    plt.legend()
-    plt.grid(True, alpha=0.3)
-    
-    plt.tight_layout()
-    plt.savefig('results/comparative_test_results.png', dpi=300)
-    plt.close()
-
-def save_comparative_results(results_dict):
-    """
-    Save comparative results to a CSV file
-    
-    Parameters:
-        results_dict (dict): Dictionary containing results for A2C and DQN
-    """
-    with open('results/comparative_results.csv', 'w', newline='') as csvfile:
-        fieldnames = ['Agent', 'Mean Reward', 'Std Reward', 'Min Reward', 'Max Reward', 'Training Time']
-        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-        
-        writer.writeheader()
-        for agent, results in results_dict.items():
-            writer.writerow({
-                'Agent': agent,
-                'Mean Reward': results['test_results']['mean_reward'],
-                'Std Reward': results['test_results']['std_reward'],
-                'Min Reward': results['test_results']['min_reward'],
-                'Max Reward': results['test_results']['max_reward'],
-                'Training Time': results['training_time']
-            })
 
 def main():
     parser = argparse.ArgumentParser(description='Stable Baselines A2C and DQN Comparison')
@@ -218,6 +175,7 @@ def main():
     for agent in agents:
         print(f"\nRunning {agent} experiments...")
         results_per_run = []
+        rewards_across_runs = []
         
         for run in range(args.runs):
             print(f"Run {run+1}/{args.runs}")
@@ -230,18 +188,10 @@ def main():
                 seed=args.seed
             )
             
-            # Test agent
-            test_results = test_agent(
-                agent_type=agent, 
-                run_id=run, 
-                max_episodes=10, 
-                render=args.render, 
-                seed=args.seed
-            )
+            rewards_across_runs.append(training_results['rewards_per_episode'])
             
             results_per_run.append({
                 'training_results': training_results,
-                'test_results': test_results,
                 'training_time': training_time
             })
         
@@ -251,34 +201,39 @@ def main():
                 'mean_reward': np.mean([r['training_results']['mean_reward'] for r in results_per_run]),
                 'std_reward': np.mean([r['training_results']['std_reward'] for r in results_per_run])
             },
-            'test_results': {
-                'mean_reward': np.mean([r['test_results']['mean_reward'] for r in results_per_run]),
-                'std_reward': np.mean([r['test_results']['std_reward'] for r in results_per_run]),
-                'min_reward': np.min([r['test_results']['min_reward'] for r in results_per_run]),
-                'max_reward': np.max([r['test_results']['max_reward'] for r in results_per_run]),
-                'rewards': np.concatenate([r['test_results']['rewards'] for r in results_per_run])
-            },
-            'training_time': np.mean([r['training_time'] for r in results_per_run])
+            'training_time': np.mean([r['training_time'] for r in results_per_run]),
+            'rewards_across_runs': rewards_across_runs
         }
         
         print(f"{agent} Results:")
         print(f"Training Mean Reward: {comparative_results[agent]['training_results']['mean_reward']:.2f}")
-        print(f"Test Mean Reward: {comparative_results[agent]['test_results']['mean_reward']:.2f}")
     
-    # Plot and save results
-    plot_test_results(
-        comparative_results['A2C']['test_results'], 
-        comparative_results['DQN']['test_results'], 
+    # Plot learning curves
+    plot_learning_curves(
+        comparative_results['A2C']['rewards_across_runs'], 
+        comparative_results['DQN']['rewards_across_runs'], 
         args.runs
     )
-    save_comparative_results(comparative_results)
+    
+    # Save comparative results to CSV
+    with open('results/comparative_results.csv', 'w', newline='') as csvfile:
+        fieldnames = ['Agent', 'Mean Reward', 'Std Reward', 'Training Time']
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+        
+        writer.writeheader()
+        for agent, results in comparative_results.items():
+            writer.writerow({
+                'Agent': agent,
+                'Mean Reward': results['training_results']['mean_reward'],
+                'Std Reward': results['training_results']['std_reward'],
+                'Training Time': results['training_time']
+            })
     
     # Print final comparative summary
     print("\nComparative Summary:")
     for agent, results in comparative_results.items():
         print(f"\n{agent}:")
         print(f"  Training Mean Reward: {results['training_results']['mean_reward']:.2f}")
-        print(f"  Test Mean Reward: {results['test_results']['mean_reward']:.2f}")
         print(f"  Training Time: {results['training_time']:.2f}s")
 
 if __name__ == "__main__":
