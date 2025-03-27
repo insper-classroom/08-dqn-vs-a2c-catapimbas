@@ -13,7 +13,7 @@ from stable_baselines3.common.vec_env import DummyVecEnv
 
 def plot_learning_curves(rewards_a2c, rewards_dqn, runs):
     """
-    Plot learning curves for A2C and DQN
+    Plot learning curves for A2C and DQN on the same graph
     
     Parameters:
         rewards_a2c (list): Rewards for A2C across runs
@@ -22,43 +22,34 @@ def plot_learning_curves(rewards_a2c, rewards_dqn, runs):
     """
     plt.figure(figsize=(15, 10))
     
-    # A2C subplot
-    plt.subplot(2, 1, 1)
+    # Convert to numpy arrays
     rewards_a2c = np.array(rewards_a2c)
-    
-    # Compute moving average
-    window = min(50, rewards_a2c.shape[1] // 5)
-    rewards_a2c_ma = np.zeros((rewards_a2c.shape[0], rewards_a2c.shape[1] - window + 1))
-    
-    for i in range(rewards_a2c.shape[0]):
-        rewards_a2c_ma[i] = np.convolve(rewards_a2c[i], np.ones(window)/window, mode='valid')
-    
-    # Plot raw rewards and moving average
-    plt.plot(rewards_a2c.T, alpha=0.1, color='blue')
-    plt.plot(np.mean(rewards_a2c_ma, axis=0), color='red', linewidth=2, 
-             label=f'Moving Average (window={window})')
-    plt.title(f'A2C Training Rewards - {runs} Runs')
-    plt.xlabel('Episodes')
-    plt.ylabel('Reward')
-    plt.legend()
-    plt.grid(True, alpha=0.3)
-    
-    # DQN subplot
-    plt.subplot(2, 1, 2)
     rewards_dqn = np.array(rewards_dqn)
     
     # Compute moving average
-    window = min(50, rewards_dqn.shape[1] // 5)
-    rewards_dqn_ma = np.zeros((rewards_dqn.shape[0], rewards_dqn.shape[1] - window + 1))
+    a2c_window = min(50, rewards_a2c.shape[1] // 5)
+    dqn_window = min(50, rewards_dqn.shape[1] // 5)
+    
+    rewards_a2c_ma = np.zeros((rewards_a2c.shape[0], rewards_a2c.shape[1] - a2c_window + 1))
+    rewards_dqn_ma = np.zeros((rewards_dqn.shape[0], rewards_dqn.shape[1] - dqn_window + 1))
+    
+    for i in range(rewards_a2c.shape[0]):
+        rewards_a2c_ma[i] = np.convolve(rewards_a2c[i], np.ones(a2c_window)/a2c_window, mode='valid')
     
     for i in range(rewards_dqn.shape[0]):
-        rewards_dqn_ma[i] = np.convolve(rewards_dqn[i], np.ones(window)/window, mode='valid')
+        rewards_dqn_ma[i] = np.convolve(rewards_dqn[i], np.ones(dqn_window)/dqn_window, mode='valid')
     
-    # Plot raw rewards and moving average
-    plt.plot(rewards_dqn.T, alpha=0.1, color='green')
-    plt.plot(np.mean(rewards_dqn_ma, axis=0), color='red', linewidth=2, 
-             label=f'Moving Average (window={window})')
-    plt.title(f'DQN Training Rewards - {runs} Runs')
+    # Plot raw rewards with transparency
+    plt.plot(rewards_a2c.T, alpha=0.1, color='blue', label='A2C Raw Rewards')
+    plt.plot(rewards_dqn.T, alpha=0.1, color='green', label='DQN Raw Rewards')
+    
+    # Plot moving averages
+    plt.plot(np.mean(rewards_a2c_ma, axis=0), color='darkblue', linewidth=2, 
+             label=f'A2C Moving Average (window={a2c_window})')
+    plt.plot(np.mean(rewards_dqn_ma, axis=0), color='darkgreen', linewidth=2, 
+             label=f'DQN Moving Average (window={dqn_window})')
+    
+    plt.title(f'A2C and DQN Training Rewards - {runs} Runs')
     plt.xlabel('Episodes')
     plt.ylabel('Reward')
     plt.legend()
@@ -180,7 +171,7 @@ def train_agent(agent_type, run_id, max_episodes=1000, seed=42):
 def main():
     parser = argparse.ArgumentParser(description='Stable Baselines A2C and DQN Comparison')
     parser.add_argument('--runs', type=int, default=1, help='Number of runs (default: 3)')
-    parser.add_argument('--episodes', type=int, default=10, help='Maximum training episodes (default: 1000)')
+    parser.add_argument('--episodes', type=int, default=1000, help='Maximum training episodes (default: 1000)')
     parser.add_argument('--seed', type=int, default=42, help='Random seed (default: 42)')
     parser.add_argument('--render', action='store_true', help='Render test episodes')
     
