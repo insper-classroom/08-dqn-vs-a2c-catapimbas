@@ -10,6 +10,8 @@ from stable_baselines3 import A2C, DQN
 from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.common.logger import configure
 from stable_baselines3.common.vec_env import DummyVecEnv
+from stable_baselines3.common.monitor import Monitor
+from tqdm import tqdm
 
 def plot_learning_curves(rewards_a2c, rewards_dqn, runs):
     """
@@ -79,8 +81,9 @@ def train_agent(agent_type, run_id, max_episodes=1000, seed=42):
     np.random.seed(seed)
     random.seed(seed)
     
-    # Create environment
+    # Create environment and wrap with Monitor
     env = gym.make('LunarLander-v3')
+    env = Monitor(env)  # Wrap the environment with Monitor
     vec_env = DummyVecEnv([lambda: env])
     
     # Configure logger
@@ -126,29 +129,36 @@ def train_agent(agent_type, run_id, max_episodes=1000, seed=42):
     # Train the agent and track rewards
     start_time = time.time()
     
-    # Custom training loop to track rewards
+    # Custom training loop to track rewards with progress bar
     rewards_per_episode = []
-    for episode in range(max_episodes):
-        # Reset environment
-        state, _ = env.reset()
-        done = False
-        total_reward = 0
-        
-        while not done:
-            # Select and take action
-            action, _ = model.predict(state, deterministic=False)
-            next_state, reward, terminated, truncated, _ = env.step(action)
+    
+    # Use tqdm for progress tracking
+    with tqdm(total=max_episodes, desc=f'{agent_type} Training', unit='episode') as pbar:
+        for episode in range(max_episodes):
+            # Reset environment
+            state, _ = env.reset()
+            done = False
+            total_reward = 0
             
-            total_reward += reward
-            state = next_state
+            while not done:
+                # Select and take action
+                action, _ = model.predict(state, deterministic=False)
+                next_state, reward, terminated, truncated, _ = env.step(action)
+                
+                total_reward += reward
+                state = next_state
+                
+                if terminated or truncated:
+                    done = True
             
-            if terminated or truncated:
-                done = True
-        
-        rewards_per_episode.append(total_reward)
-        
-        # Learn from collected experiences if needed
-        model.learn(total_timesteps=1000)
+            rewards_per_episode.append(total_reward)
+            
+            # Update progress bar with current episode reward
+            pbar.set_postfix({'Episode Reward': f'{total_reward:.2f}'})
+            pbar.update(1)
+            
+            # Learn from collected experiences if needed
+            model.learn(total_timesteps=1000)
     
     training_time = time.time() - start_time
     
@@ -171,7 +181,7 @@ def train_agent(agent_type, run_id, max_episodes=1000, seed=42):
 def main():
     parser = argparse.ArgumentParser(description='Stable Baselines A2C and DQN Comparison')
     parser.add_argument('--runs', type=int, default=1, help='Number of runs (default: 3)')
-    parser.add_argument('--episodes', type=int, default=1000, help='Maximum training episodes (default: 1000)')
+    parser.add_argument('--episodes', type=int, default=10, help='Maximum training episodes (default: 1000)')
     parser.add_argument('--seed', type=int, default=42, help='Random seed (default: 42)')
     parser.add_argument('--render', action='store_true', help='Render test episodes')
     
