@@ -6,21 +6,22 @@ import random
 import os
 import argparse
 import csv
+from tqdm import tqdm
 from stable_baselines3 import A2C, DQN
 from stable_baselines3.common.evaluation import evaluate_policy
+from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.logger import configure
 from stable_baselines3.common.vec_env import DummyVecEnv
-from stable_baselines3.common.monitor import Monitor
-from tqdm import tqdm
 
-def plot_learning_curves(rewards_a2c, rewards_dqn, runs):
+def plot_learning_curves(rewards_a2c, rewards_dqn, runs, env_name):
     """
-    Plot learning curves for A2C and DQN on the same graph
+    Plot learning curves for A2C and DQN
     
     Parameters:
         rewards_a2c (list): Rewards for A2C across runs
         rewards_dqn (list): Rewards for DQN across runs
         runs (int): Number of runs
+        env_name (str): Name of the environment
     """
     plt.figure(figsize=(15, 10))
     
@@ -51,22 +52,23 @@ def plot_learning_curves(rewards_a2c, rewards_dqn, runs):
     plt.plot(np.mean(rewards_dqn_ma, axis=0), color='darkgreen', linewidth=2, 
              label=f'DQN Moving Average (window={dqn_window})')
     
-    plt.title(f'A2C and DQN Training Rewards - {runs} Runs')
+    plt.title(f'{env_name}: A2C and DQN Training Rewards - {runs} Runs')
     plt.xlabel('Episodes')
     plt.ylabel('Reward')
     plt.legend()
     plt.grid(True, alpha=0.3)
     
     plt.tight_layout()
-    plt.savefig('results/learning_curves_comparison.png', dpi=300)
+    plt.savefig(f'results/{env_name.lower().replace("-", "_")}_learning_curves_comparison.png', dpi=300)
     plt.close()
 
-def train_agent(agent_type, run_id, max_episodes=1000, seed=42):
+def train_agent(agent_type, env_name, run_id, max_episodes=1000, seed=42):
     """
-    Train a Stable Baselines agent on the Lunar Lander environment
+    Train a Stable Baselines agent on specified environment
     
     Parameters:
         agent_type (str): Type of agent ('A2C' or 'DQN')
+        env_name (str): Name of the environment
         run_id (int): Unique run identifier
         max_episodes (int): Maximum number of training episodes
         seed (int): Random seed for reproducibility
@@ -82,19 +84,19 @@ def train_agent(agent_type, run_id, max_episodes=1000, seed=42):
     random.seed(seed)
     
     # Create environment and wrap with Monitor
-    env = gym.make('LunarLander-v3')
-    env = Monitor(env)  # Wrap the environment with Monitor
+    env = gym.make(env_name)
+    env = Monitor(env)
     vec_env = DummyVecEnv([lambda: env])
     
     # Configure logger
-    log_path = f'results/{agent_type.lower()}_logs_run_{run_id}/'
+    log_path = f'results/{env_name.lower().replace("-", "_")}_{agent_type.lower()}_logs_run_{run_id}/'
     os.makedirs(log_path, exist_ok=True)
     logger = configure(log_path, ["csv"])
     
-    # Hyperparameters as specified
-    gamma = 0.99  # Fator de Desconto (Discount Factor)
-    batch_size = 64  # Tamanho do Lote (Batch Size)
-    learning_rate = 1e-3  # Default learning rate
+    # Hyperparameters
+    gamma = 0.99  # Discount Factor
+    batch_size = 64  # Batch Size
+    learning_rate = 1e-3  # Learning Rate
     
     # Select and initialize agent with specified hyperparameters
     if agent_type == 'A2C':
@@ -103,7 +105,7 @@ def train_agent(agent_type, run_id, max_episodes=1000, seed=42):
             vec_env, 
             seed=seed, 
             verbose=1,
-            gamma=gamma,  # Discount factor
+            gamma=gamma,
             learning_rate=learning_rate
         )
     elif agent_type == 'DQN':
@@ -112,13 +114,13 @@ def train_agent(agent_type, run_id, max_episodes=1000, seed=42):
             vec_env, 
             seed=seed, 
             verbose=1,
-            gamma=gamma,  # Discount factor
+            gamma=gamma,
             batch_size=batch_size,
             learning_rate=learning_rate,
-            buffer_size=50000,  # Tamanho da Memória de Replay
-            exploration_initial_eps=1.0,  # Taxa de Exploração Inicial
-            exploration_final_eps=0.01,   # Taxa de Exploração Mínima
-            exploration_fraction=0.995    # Taxa de Decaimento de Exploração
+            buffer_size=50000,
+            exploration_initial_eps=1.0,
+            exploration_final_eps=0.01,
+            exploration_fraction=0.995
         )
     else:
         raise ValueError(f"Unsupported agent type: {agent_type}")
@@ -133,7 +135,7 @@ def train_agent(agent_type, run_id, max_episodes=1000, seed=42):
     rewards_per_episode = []
     
     # Use tqdm for progress tracking
-    with tqdm(total=max_episodes, desc=f'{agent_type} Training', unit='episode') as pbar:
+    with tqdm(total=max_episodes, desc=f'{agent_type} {env_name} Training', unit='episode') as pbar:
         for episode in range(max_episodes):
             # Reset environment
             state, _ = env.reset()
@@ -163,7 +165,7 @@ def train_agent(agent_type, run_id, max_episodes=1000, seed=42):
     training_time = time.time() - start_time
     
     # Save the model
-    model_path = f'data/{agent_type.lower()}_lunar_lander_model_run_{run_id}.zip'
+    model_path = f'data/{env_name.lower().replace("-", "_")}_{agent_type.lower()}_model_run_{run_id}.zip'
     model.save(model_path)
     
     # Evaluate training performance
@@ -179,11 +181,13 @@ def train_agent(agent_type, run_id, max_episodes=1000, seed=42):
     }, training_time
 
 def main():
-    parser = argparse.ArgumentParser(description='Stable Baselines A2C and DQN Comparison')
+    parser = argparse.ArgumentParser(description='Multi-Environment RL Agent Comparison')
     parser.add_argument('--runs', type=int, default=1, help='Number of runs (default: 3)')
     parser.add_argument('--episodes', type=int, default=10, help='Maximum training episodes (default: 1000)')
     parser.add_argument('--seed', type=int, default=42, help='Random seed (default: 42)')
-    parser.add_argument('--render', action='store_true', help='Render test episodes')
+    parser.add_argument('--environments', nargs='+', 
+                        default=['CartPole-v1', 'LunarLander-v3'], 
+                        help='Environments to train on')
     
     args = parser.parse_args()
     
@@ -191,75 +195,89 @@ def main():
     os.makedirs('results', exist_ok=True)
     os.makedirs('data', exist_ok=True)
     
-    # Comparative results dictionary
-    comparative_results = {}
-    
     # Agents to compare
     agents = ['A2C', 'DQN']
     
-    for agent in agents:
-        print(f"\nRunning {agent} experiments...")
-        results_per_run = []
-        rewards_across_runs = []
-        
-        for run in range(args.runs):
-            print(f"Run {run+1}/{args.runs}")
-            
-            # Train agent
-            _, training_results, training_time = train_agent(
-                agent_type=agent, 
-                run_id=run, 
-                max_episodes=args.episodes, 
-                seed=args.seed
-            )
-            
-            rewards_across_runs.append(training_results['rewards_per_episode'])
-            
-            results_per_run.append({
-                'training_results': training_results,
-                'training_time': training_time
-            })
-        
-        # Average results across runs
-        comparative_results[agent] = {
-            'training_results': {
-                'mean_reward': np.mean([r['training_results']['mean_reward'] for r in results_per_run]),
-                'std_reward': np.mean([r['training_results']['std_reward'] for r in results_per_run])
-            },
-            'training_time': np.mean([r['training_time'] for r in results_per_run]),
-            'rewards_across_runs': rewards_across_runs
-        }
-        
-        print(f"{agent} Results:")
-        print(f"Training Mean Reward: {comparative_results[agent]['training_results']['mean_reward']:.2f}")
+    # Comparative results for all environments
+    all_comparative_results = {}
     
-    # Plot learning curves
-    plot_learning_curves(
-        comparative_results['A2C']['rewards_across_runs'], 
-        comparative_results['DQN']['rewards_across_runs'], 
-        args.runs
-    )
-    
-    # Save comparative results to CSV
-    with open('results/comparative_results.csv', 'w', newline='') as csvfile:
-        fieldnames = ['Agent', 'Mean Reward', 'Std Reward', 'Training Time']
-        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+    # Iterate through environments
+    for env_name in args.environments:
+        print(f"\nTraining on {env_name} environment...")
         
-        writer.writeheader()
-        for agent, results in comparative_results.items():
-            writer.writerow({
-                'Agent': agent,
-                'Mean Reward': results['training_results']['mean_reward'],
-                'Std Reward': results['training_results']['std_reward'],
-                'Training Time': results['training_time']
-            })
+        # Comparative results dictionary for this environment
+        comparative_results = {}
+        
+        for agent in agents:
+            print(f"\nRunning {agent} experiments...")
+            results_per_run = []
+            rewards_across_runs = []
+            
+            for run in range(args.runs):
+                print(f"Run {run+1}/{args.runs}")
+                
+                # Train agent
+                _, training_results, training_time = train_agent(
+                    agent_type=agent, 
+                    env_name=env_name,
+                    run_id=run, 
+                    max_episodes=args.episodes, 
+                    seed=args.seed
+                )
+                
+                rewards_across_runs.append(training_results['rewards_per_episode'])
+                
+                results_per_run.append({
+                    'training_results': training_results,
+                    'training_time': training_time
+                })
+            
+            # Average results across runs
+            comparative_results[agent] = {
+                'training_results': {
+                    'mean_reward': np.mean([r['training_results']['mean_reward'] for r in results_per_run]),
+                    'std_reward': np.mean([r['training_results']['std_reward'] for r in results_per_run])
+                },
+                'training_time': np.mean([r['training_time'] for r in results_per_run]),
+                'rewards_across_runs': rewards_across_runs
+            }
+            
+            print(f"{agent} Results:")
+            print(f"Training Mean Reward: {comparative_results[agent]['training_results']['mean_reward']:.2f}")
+        
+        # Plot learning curves for this environment
+        plot_learning_curves(
+            comparative_results['A2C']['rewards_across_runs'], 
+            comparative_results['DQN']['rewards_across_runs'], 
+            args.runs,
+            env_name
+        )
+        
+        # Save results for this environment
+        all_comparative_results[env_name] = comparative_results
+        
+        # Save comparative results to CSV
+        with open(f'results/{env_name.lower().replace("-", "_")}_comparative_results.csv', 'w', newline='') as csvfile:
+            fieldnames = ['Agent', 'Mean Reward', 'Std Reward', 'Training Time']
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+            
+            writer.writeheader()
+            for agent, results in comparative_results.items():
+                writer.writerow({
+                    'Agent': agent,
+                    'Mean Reward': results['training_results']['mean_reward'],
+                    'Std Reward': results['training_results']['std_reward'],
+                    'Training Time': results['training_time']
+                })
     
     # Print final comparative summary
     print("\nComparative Summary:")
-    for agent, results in comparative_results.items():
-        print(f"\n{agent}:")
-        print(f"  Training Mean Reward: {results['training_results']['mean_reward']:.2f}")
-        print(f"  Training Time: {results['training_time']:.2f}s")
+    for env_name, results in all_comparative_results.items():
+        print(f"\n{env_name}:")
+        for agent, agent_results in results.items():
+            print(f"  {agent}:")
+            print(f"    Training Mean Reward: {agent_results['training_results']['mean_reward']:.2f}")
+            print(f"    Training Time: {agent_results['training_time']:.2f}s")
 
 if __name__ == "__main__":
     main()
