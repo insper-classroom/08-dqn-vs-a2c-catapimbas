@@ -12,6 +12,7 @@ from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.logger import configure
 from stable_baselines3.common.vec_env import DummyVecEnv
+import ale_py
 
 def plot_learning_curves(rewards_a2c, rewards_dqn, runs, env_name):
     """
@@ -186,7 +187,7 @@ def main():
     parser.add_argument('--episodes', type=int, default=10, help='Maximum training episodes (default: 1000)')
     parser.add_argument('--seed', type=int, default=42, help='Random seed (default: 42)')
     parser.add_argument('--environments', nargs='+', 
-                        default=['CartPole-v1', 'LunarLander-v3'], 
+                        default=['CartPole-v1', 'LunarLander-v3', 'ALE/Breakout-v5'], 
                         help='Environments to train on')
     
     args = parser.parse_args()
