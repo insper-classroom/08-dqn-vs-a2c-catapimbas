@@ -221,7 +221,7 @@ def main():
     parser.add_argument('--episodes', type=int, default=2000, help='Maximum training episodes (default: 1000)')
     parser.add_argument('--seed', type=int, default=42, help='Random seed (default: 42)')
     parser.add_argument('--environments', nargs='+', 
-                        default=['CartPole-v1', 'LunarLander-v3'], 
+                        default=['CartPole-v1', 'LunarLander-v3', 'ALE/Breakout-v5'], 
                         help='Environments to train on')
     
     args = parser.parse_args()

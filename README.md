@@ -11,6 +11,10 @@
 
 ![Lunar Lander Comparison](results/lunarlander_v3_learning_curves_comparison.png)
 
+## Breakout Comparison
+
+![Breakout Comparison](results/breakout_learning_curves_comparison.png)
+
 
 ## Models
 
