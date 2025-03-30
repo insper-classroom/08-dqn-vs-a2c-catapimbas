@@ -141,7 +141,11 @@ To add a new algorithm:
 
 ### Loading and Testing Saved Models
 
-You can load saved models for evaluation using:
+You can load saved models for evaluation using the examples below.
+
+#### Standard Environments
+
+For standard environments like CartPole:
 
 ```python
 from stable_baselines3 import A2C, DQN
@@ -153,15 +157,50 @@ model = A2C.load("data/cartpole_v1_a2c_model_run_0.zip")
 model = DQN.load("data/cartpole_v1_dqn_model_run_0.zip")
 
 # Test the model
-env = gym.make("CartPole-v1")
+env = gym.make("CartPole-v1", render_mode="human")
 obs, _ = env.reset()
 done = False
+total_reward = 0
 
 while not done:
     action, _ = model.predict(obs)
     obs, reward, terminated, truncated, info = env.step(action)
+    total_reward += reward
     done = terminated or truncated
-    env.render()  # If you want to visualize
+    
+print(f"Total reward: {total_reward}")
+env.close()
+```
+
+#### Atari/ALE Environments
+
+For Atari/ALE environments, you need to use the proper wrappers and CnnPolicy:
+
+```python
+from stable_baselines3 import A2C, DQN
+import gymnasium as gym
+from stable_baselines3.common.atari_wrappers import AtariWrapper
+
+# Load the model - note the sanitized filename format
+model = A2C.load("data/ale_breakout_v5_a2c_model_run_0.zip")
+# or
+model = DQN.load("data/ale_breakout_v5_dqn_model_run_0.zip")
+
+# Create environment with proper wrappers and render mode
+env = AtariWrapper(gym.make("ALE/Breakout-v5", render_mode="human"))
+obs, _ = env.reset()
+done = False
+total_reward = 0
+
+# Run the game
+while not done:
+    action, _ = model.predict(obs)
+    obs, reward, terminated, truncated, info = env.step(action)
+    total_reward += reward
+    done = terminated or truncated
+    
+print(f"Total reward: {total_reward}")
+env.close()
 ```
 
 ### Key Functions
