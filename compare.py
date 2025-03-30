@@ -12,6 +12,7 @@ from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.logger import configure
 from stable_baselines3.common.vec_env import DummyVecEnv
+from stable_baselines3.common.atari_wrappers import AtariWrapper
 import ale_py
 
 def plot_learning_curves(rewards_a2c, rewards_dqn, runs, env_name):
@@ -44,8 +45,8 @@ def plot_learning_curves(rewards_a2c, rewards_dqn, runs, env_name):
         rewards_dqn_ma[i] = np.convolve(rewards_dqn[i], np.ones(dqn_window)/dqn_window, mode='valid')
     
     # Plot raw rewards with transparency
-    plt.plot(rewards_a2c.T, alpha=0.1, color='blue', label='A2C Raw Rewards')
-    plt.plot(rewards_dqn.T, alpha=0.1, color='green', label='DQN Raw Rewards')
+    plt.plot(rewards_a2c.T, alpha=0.25, color='blue', label='A2C Raw Rewards')
+    plt.plot(rewards_dqn.T, alpha=0.25, color='green', label='DQN Raw Rewards')
     
     # Plot moving averages
     plt.plot(np.mean(rewards_a2c_ma, axis=0), color='darkblue', linewidth=2, 
@@ -60,7 +61,13 @@ def plot_learning_curves(rewards_a2c, rewards_dqn, runs, env_name):
     plt.grid(True, alpha=0.3)
     
     plt.tight_layout()
-    plt.savefig(f'results/{env_name.lower().replace("-", "_")}_learning_curves_comparison.png', dpi=300)
+    
+    # Ensure directories exist
+    os.makedirs('results', exist_ok=True)
+    
+    # Save figure with sanitized filename
+    safe_env_name = env_name.lower().replace("-", "_").replace("/", "_").replace("\\", "_")
+    plt.savefig(f'results/{safe_env_name}_learning_curves_comparison.png', dpi=300)
     plt.close()
 
 def train_agent(agent_type, env_name, run_id, max_episodes=1000, seed=42):
@@ -84,25 +91,47 @@ def train_agent(agent_type, env_name, run_id, max_episodes=1000, seed=42):
     np.random.seed(seed)
     random.seed(seed)
     
-    # Create environment and wrap with Monitor
-    env = gym.make(env_name)
+    # Configure for Atari vs standard environments
+    is_atari = 'ALE/' in env_name
+    
+    # Create environment with appropriate wrappers
+    if is_atari:
+        # For Atari, use AtariWrapper and CnnPolicy
+        env = AtariWrapper(gym.make(env_name))
+        policy = "CnnPolicy"
+        # Reduced learning rate for Atari
+        learning_rate = 2.5e-4
+    else:
+        # For standard environments, use normal gym and MlpPolicy
+        env = gym.make(env_name)
+        policy = "MlpPolicy"
+        learning_rate = 1e-3
+    
+    # Wrap with Monitor and VecEnv
     env = Monitor(env)
     vec_env = DummyVecEnv([lambda: env])
     
     # Configure logger
-    log_path = f'results/{env_name.lower().replace("-", "_")}_{agent_type.lower()}_logs_run_{run_id}/'
+    # Sanitize environment name for file paths
+    safe_env_name = env_name.lower().replace("-", "_").replace("/", "_").replace("\\", "_")
+    log_path = f'results/{safe_env_name}_{agent_type.lower()}_logs_run_{run_id}/'
     os.makedirs(log_path, exist_ok=True)
     logger = configure(log_path, ["csv"])
     
     # Hyperparameters
     gamma = 0.99  # Discount Factor
-    batch_size = 64  # Batch Size
-    learning_rate = 1e-3  # Learning Rate
+    batch_size = 64  # Batch Size for DQN
+    
+    # Buffer sizes - reduced for Atari
+    if is_atari:
+        buffer_size = 10000  # Reduced buffer size for Atari
+    else:
+        buffer_size = 50000  # Original buffer size
     
     # Select and initialize agent with specified hyperparameters
     if agent_type == 'A2C':
         model = A2C(
-            "MlpPolicy", 
+            policy, 
             vec_env, 
             seed=seed, 
             verbose=1,
@@ -111,14 +140,14 @@ def train_agent(agent_type, env_name, run_id, max_episodes=1000, seed=42):
         )
     elif agent_type == 'DQN':
         model = DQN(
-            "MlpPolicy", 
+            policy, 
             vec_env, 
             seed=seed, 
             verbose=1,
             gamma=gamma,
             batch_size=batch_size,
             learning_rate=learning_rate,
-            buffer_size=50000,
+            buffer_size=buffer_size,
             exploration_initial_eps=1.0,
             exploration_final_eps=0.01,
             exploration_fraction=0.995
@@ -166,11 +195,16 @@ def train_agent(agent_type, env_name, run_id, max_episodes=1000, seed=42):
     training_time = time.time() - start_time
     
     # Save the model
-    model_path = f'data/{env_name.lower().replace("-", "_")}_{agent_type.lower()}_model_run_{run_id}.zip'
+    # Ensure data directory exists
+    os.makedirs('data', exist_ok=True)
+    
+    # Save with sanitized filename
+    model_path = f'data/{safe_env_name}_{agent_type.lower()}_model_run_{run_id}.zip'
     model.save(model_path)
     
-    # Evaluate training performance
-    mean_reward, std_reward = evaluate_policy(model, vec_env, n_eval_episodes=100)
+    # Evaluate training performance with fewer episodes for Atari
+    n_eval_episodes = 10 if is_atari else 100
+    mean_reward, std_reward = evaluate_policy(model, vec_env, n_eval_episodes=n_eval_episodes)
     
     # Close environment
     env.close()
@@ -184,10 +218,10 @@ def train_agent(agent_type, env_name, run_id, max_episodes=1000, seed=42):
 def main():
     parser = argparse.ArgumentParser(description='Multi-Environment RL Agent Comparison')
     parser.add_argument('--runs', type=int, default=1, help='Number of runs (default: 3)')
-    parser.add_argument('--episodes', type=int, default=10, help='Maximum training episodes (default: 1000)')
+    parser.add_argument('--episodes', type=int, default=2000, help='Maximum training episodes (default: 1000)')
     parser.add_argument('--seed', type=int, default=42, help='Random seed (default: 42)')
     parser.add_argument('--environments', nargs='+', 
-                        default=['CartPole-v1', 'LunarLander-v3', 'ALE/Breakout-v5'], 
+                        default=['CartPole-v1', 'LunarLander-v3'], 
                         help='Environments to train on')
     
     args = parser.parse_args()
@@ -206,6 +240,9 @@ def main():
     for env_name in args.environments:
         print(f"\nTraining on {env_name} environment...")
         
+        # Sanitize environment name for file paths
+        safe_env_name = env_name.lower().replace("-", "_").replace("/", "_").replace("\\", "_")
+        
         # Comparative results dictionary for this environment
         comparative_results = {}
         
@@ -223,7 +260,7 @@ def main():
                     env_name=env_name,
                     run_id=run, 
                     max_episodes=args.episodes, 
-                    seed=args.seed
+                    seed=args.seed + run  # Different seed for each run
                 )
                 
                 rewards_across_runs.append(training_results['rewards_per_episode'])
@@ -258,7 +295,7 @@ def main():
         all_comparative_results[env_name] = comparative_results
         
         # Save comparative results to CSV
-        with open(f'results/{env_name.lower().replace("-", "_")}_comparative_results.csv', 'w', newline='') as csvfile:
+        with open(f'results/{safe_env_name}_comparative_results.csv', 'w', newline='') as csvfile:
             fieldnames = ['Agent', 'Mean Reward', 'Std Reward', 'Training Time']
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
             
