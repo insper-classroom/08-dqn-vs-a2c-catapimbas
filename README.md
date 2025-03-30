@@ -13,7 +13,7 @@
 
 ## Breakout Comparison
 
-![Breakout Comparison](results/breakout_learning_curves_comparison.png)
+![Breakout Comparison](results/ale_breakout_v5_learning_curves_comparison.png)
 
 
 ## Models
