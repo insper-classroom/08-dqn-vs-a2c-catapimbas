@@ -4,7 +4,7 @@ from stable_baselines3.common.logger import configure
 from stable_baselines3.common.evaluation import evaluate_policy
 
 # Configure logger
-tmp_path = "./results/"
+tmp_path = "./logs/"
 new_logger = configure(tmp_path, ["stdout", "csv", "log", "json"])
 
 # Create environment

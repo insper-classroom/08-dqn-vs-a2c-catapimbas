@@ -4,21 +4,21 @@
 
 ## Cartpole Comparison
 
-![Cartpole Comparison](results/cartpole_v1_learning_curves_comparison.png)
+![Cartpole Comparison](logs/cartpole_v1_learning_curves_comparison.png)
 
 
 ## Lunar Lander Comparison
 
-![Lunar Lander Comparison](results/lunarlander_v3_learning_curves_comparison.png)
+![Lunar Lander Comparison](logs/lunarlander_v3_learning_curves_comparison.png)
 
 ## Breakout Comparison
 
-![Breakout Comparison](results/ale_breakout_v5_learning_curves_comparison.png)
+![Breakout Comparison](logs/ale_breakout_v5_learning_curves_comparison.png)
 
 
 ## Models
 
-The models generated in the experiments are available in the `data` directory.
+The models generated in the experiments are available in the `models` directory.
 
 
 # Usage
@@ -76,25 +76,25 @@ The tool produces several outputs:
 
 After running the script, the following directories will be created:
 
-- `results/`: Contains logs, CSV files with comparative results, and learning curve plots
-- `data/`: Contains saved model files
+- `logs/`: Contains logs, CSV files with comparative results, and learning curve plots
+- `models/`: Contains saved model files
 
 ### Result Files
 
 For each environment, the following files are generated:
 
-1. **Learning Curve Plots**: `results/{environment_name}_learning_curves_comparison.png`
+1. **Learning Curve Plots**: `logs/{environment_name}_learning_curves_comparison.png`
    - Shows the training progress (rewards over episodes) for both algorithms
    - Includes both raw rewards and moving averages
 
-2. **Comparative Results CSV**: `results/{environment_name}_comparative_results.csv`
+2. **Comparative Results CSV**: `logs/{environment_name}_comparative_results.csv`
    - Contains tabular data comparing the algorithms' performance
    - Includes mean rewards, standard deviations, and training times
 
-3. **Training Logs**: `results/{environment_name}_{algorithm}_logs_run_{run_id}/`
+3. **Training Logs**: `logs/{environment_name}_{algorithm}_logs_run_{run_id}/`
    - Contains detailed logs from the Stable Baselines3 library
 
-4. **Saved Models**: `data/{environment_name}_{algorithm}_model_run_{run_id}.zip`
+4. **Saved Models**: `models/{environment_name}_{algorithm}_model_run_{run_id}.zip`
    - Trained model files that can be loaded for further testing or deployment
 
 ## Understanding the Output
@@ -152,9 +152,9 @@ from stable_baselines3 import A2C, DQN
 import gymnasium as gym
 
 # Load the model
-model = A2C.load("data/cartpole_v1_a2c_model_run_0.zip")
+model = A2C.load("models/cartpole_v1_a2c_model_run_0.zip")
 # or
-model = DQN.load("data/cartpole_v1_dqn_model_run_0.zip")
+model = DQN.load("models/cartpole_v1_dqn_model_run_0.zip")
 
 # Test the model
 env = gym.make("CartPole-v1", render_mode="human")
@@ -182,9 +182,9 @@ import gymnasium as gym
 from stable_baselines3.common.atari_wrappers import AtariWrapper
 
 # Load the model - note the sanitized filename format
-model = A2C.load("data/ale_breakout_v5_a2c_model_run_0.zip")
+model = A2C.load("models/ale_breakout_v5_a2c_model_run_0.zip")
 # or
-model = DQN.load("data/ale_breakout_v5_dqn_model_run_0.zip")
+model = DQN.load("models/ale_breakout_v5_dqn_model_run_0.zip")
 
 # Create environment with proper wrappers and render mode
 env = AtariWrapper(gym.make("ALE/Breakout-v5", render_mode="human"))

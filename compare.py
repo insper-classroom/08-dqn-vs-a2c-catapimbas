@@ -63,11 +63,11 @@ def plot_learning_curves(rewards_a2c, rewards_dqn, runs, env_name):
     plt.tight_layout()
     
     # Ensure directories exist
-    os.makedirs('results', exist_ok=True)
+    os.makedirs('logs', exist_ok=True)
     
     # Save figure with sanitized filename
     safe_env_name = env_name.lower().replace("-", "_").replace("/", "_").replace("\\", "_")
-    plt.savefig(f'results/{safe_env_name}_learning_curves_comparison.png', dpi=300)
+    plt.savefig(f'logs/{safe_env_name}_learning_curves_comparison.png', dpi=300)
     plt.close()
 
 def train_agent(agent_type, env_name, run_id, max_episodes=1000, seed=42):
@@ -114,7 +114,7 @@ def train_agent(agent_type, env_name, run_id, max_episodes=1000, seed=42):
     # Configure logger
     # Sanitize environment name for file paths
     safe_env_name = env_name.lower().replace("-", "_").replace("/", "_").replace("\\", "_")
-    log_path = f'results/{safe_env_name}_{agent_type.lower()}_logs_run_{run_id}/'
+    log_path = f'logs/{safe_env_name}_{agent_type.lower()}_logs_run_{run_id}/'
     os.makedirs(log_path, exist_ok=True)
     logger = configure(log_path, ["csv"])
     
@@ -195,11 +195,11 @@ def train_agent(agent_type, env_name, run_id, max_episodes=1000, seed=42):
     training_time = time.time() - start_time
     
     # Save the model
-    # Ensure data directory exists
-    os.makedirs('data', exist_ok=True)
+    # Ensure models directory exists
+    os.makedirs('models', exist_ok=True)
     
     # Save with sanitized filename
-    model_path = f'data/{safe_env_name}_{agent_type.lower()}_model_run_{run_id}.zip'
+    model_path = f'models/{safe_env_name}_{agent_type.lower()}_model_run_{run_id}.zip'
     model.save(model_path)
     
     # Evaluate training performance with fewer episodes for Atari
@@ -226,9 +226,9 @@ def main():
     
     args = parser.parse_args()
     
-    # Ensure results and data directories exist
-    os.makedirs('results', exist_ok=True)
-    os.makedirs('data', exist_ok=True)
+    # Ensure logs and models directories exist
+    os.makedirs('logs', exist_ok=True)
+    os.makedirs('models', exist_ok=True)
     
     # Agents to compare
     agents = ['A2C', 'DQN']
@@ -295,7 +295,7 @@ def main():
         all_comparative_results[env_name] = comparative_results
         
         # Save comparative results to CSV
-        with open(f'results/{safe_env_name}_comparative_results.csv', 'w', newline='') as csvfile:
+        with open(f'logs/{safe_env_name}_comparative_results.csv', 'w', newline='') as csvfile:
             fieldnames = ['Agent', 'Mean Reward', 'Std Reward', 'Training Time']
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
             
